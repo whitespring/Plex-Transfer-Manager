@@ -146,7 +146,7 @@ router.post('/generate-nginx', (req, res) => {
     // Run the nginx generation script
     const generateScript = join(__dirname, '..', '..', '..', 'scripts', 'generate-nginx.js');
 
-    const child = spawn('node', [generateScript], {
+    const child = spawn('node', ['--silent', generateScript], {
       cwd: join(__dirname, '..', '..'),
       stdio: ['pipe', 'pipe', 'pipe']
     });
