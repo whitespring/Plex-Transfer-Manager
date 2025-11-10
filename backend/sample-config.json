@@ -1,0 +1,105 @@
+{
+  "_comment": "Plex Transfer Manager - Sample Configuration",
+  "_instructions": "Copy this file to src/config/config.json and replace with your actual server details",
+
+  "servers": [
+    {
+      "id": "server1",
+      "name": "Plex Server A",
+      "plexUrl": "http://YOUR_SERVER1_IP:32400",
+      "plexToken": "YOUR_PLEX_API_TOKEN_HERE",
+      "ssh": {
+        "host": "YOUR_SERVER1_IP_OR_HOSTNAME",
+        "port": 22,
+        "username": "your_ssh_username",
+        "password": "env:PLEX_SERVER1_SSH_PASSWORD"
+      },
+      "mediaPaths": {
+        "movies": "/path/to/movies/directory",
+        "tv": "/path/to/tvshows/directory",
+        "root": "/path/to/root/media/directory"
+      }
+    },
+    {
+      "id": "server2",
+      "name": "Plex Server B",
+      "plexUrl": "http://YOUR_SERVER2_IP:32400",
+      "plexToken": "YOUR_PLEX_API_TOKEN_HERE",
+      "ssh": {
+        "host": "YOUR_SERVER2_IP_OR_HOSTNAME",
+        "port": 22,
+        "username": "your_ssh_username",
+        "password": "env:PLEX_SERVER2_SSH_PASSWORD"
+      },
+      "mediaPaths": {
+        "movies": "/path/to/movies/directory",
+        "tv": "/path/to/tvshows/directory",
+        "root": "/path/to/root/media/directory"
+      }
+    }
+  ],
+
+  "backend": {
+    "_comment": "Backend server configuration",
+    "port": 3001,
+    "host": "0.0.0.0",
+    "corsOrigins": [
+      "http://localhost:3000",
+      "http://localhost:5173",
+      "http://YOUR_SERVER_IP:3000",
+      "http://YOUR_SERVER_IP:5173"
+    ]
+  },
+
+  "transfer": {
+    "_comment": "File transfer configuration",
+    "maxConcurrent": 1,
+    "rsyncOptions": "-avz --progress --partial"
+  },
+
+  "ssh": {
+    "_comment": "SSH connection settings",
+    "keyPath": "/root/.ssh/id_rsa",
+    "readyTimeout": 30000,
+    "keepaliveInterval": 10000
+  },
+
+  "vite": {
+    "_comment": "Development server configuration (for npm run dev)",
+    "port": 5173,
+    "open": true,
+    "proxy": {
+      "api": "http://localhost:3001",
+      "socket": "http://localhost:3001"
+    }
+  },
+
+  "ui": {
+    "_comment": "User interface settings",
+    "visibleMovies": 50,
+    "visibleEpisodes": 50,
+    "visibleSeasons": 24
+  },
+
+  "frontend": {
+    "_comment": "Frontend application settings",
+    "port": 3000,
+    "defaultSourceServer": "server1",
+    "defaultDestServer": "server2"
+  },
+
+  "nginx": {
+    "_comment": "Production nginx configuration - run 'npm run generate-nginx' to create nginx.conf",
+    "port": 80,
+    "serverName": "yourdomain.com",
+    "root": "/var/www/html/plex",
+    "backendUrl": "http://localhost:3001",
+    "accessLog": "/var/log/nginx/plextransfer_access.log",
+    "errorLog": "/var/log/nginx/plextransfer_error.log",
+    "ssl": {
+      "enabled": false,
+      "cert": "/etc/ssl/certs/yourdomain.crt",
+      "key": "/etc/ssl/private/yourdomain.key"
+    }
+  }
+}

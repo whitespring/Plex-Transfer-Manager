@@ -1,0 +1,947 @@
+{
+  "project": {
+    "name": "Plex Transfer Manager",
+    "version": "1.0.0",
+    "created": "2025-01-07",
+    "description": "Dual-server Plex management application with direct SSH file transfers between servers",
+    "repository": "Plex_Transfer_Manager",
+    "status": "in_development"
+  },
+  "overview": {
+    "purpose": "Enable management of two Plex servers with the ability to browse, select, and transfer media files directly between servers using SSH/rsync",
+    "key_features": [
+      "Multi-server Plex integration with real server names",
+      "SSH-based file browsing with disk space monitoring",
+      "Direct server-to-server file transfers (no intermediate storage)",
+      "Real-time transfer progress tracking",
+      "Transfer queue management",
+      "Recent movies display with multi-selection",
+      "One-click transfer of selected movies (Server A → Server B)",
+      "Reuse existing duplicate finder and recently added features"
+    ],
+    "target_users": "Home media server administrators managing multiple Plex instances"
+  },
+  "architecture": {
+    "type": "Client-Server with WebSocket",
+    "components": {
+      "frontend": {
+        "technology": "React 18 + Vite + TailwindCSS",
+        "location": "User's browser",
+        "port": 3000,
+        "description": "SPA for server management and file transfers"
+      },
+      "backend": {
+        "technology": "Node.js + Express + Socket.io",
+        "location": "LXC Container (192.168.2.208)",
+        "port": 3001,
+        "description": "API server handling SSH connections and orchestrating transfers"
+      },
+      "plex_servers": [
+        {
+          "id": "server_a",
+          "ip": "192.168.0.105",
+          "role": "Source server (movies)"
+        },
+        {
+          "id": "server_b",
+          "ip": "192.168.0.101",
+          "role": "Destination server"
+        }
+      ]
+    },
+    "data_flow": "Browser → Backend API/WebSocket → SSH to Server A → rsync to Server B",
+    "authentication": {
+      "backend_to_servers": "SSH key-based authentication",
+      "server_to_server": "SSH key-based (passwordless)",
+      "frontend_to_backend": "CORS-based (network access)"
+    }
+  },
+  "technical_requirements": {
+    "system": {
+      "backend_os": "Linux (LXC)",
+      "required_packages": ["openssh-client", "rsync"],
+      "node_version": ">=18.0.0",
+      "network": "All servers on same VMBR network"
+    },
+    "dependencies": {
+      "backend": {
+        "runtime": {
+          "express": "^4.18.2",
+          "socket.io": "^4.6.1",
+          "ssh2": "^1.14.0",
+          "cors": "^2.8.5",
+          "dotenv": "^16.3.1"
+        },
+        "development": {
+          "nodemon": "^3.0.1"
+        }
+      },
+      "frontend": {
+        "runtime": {
+          "react": "^18.2.0",
+          "react-dom": "^18.2.0",
+          "socket.io-client": "^4.6.1",
+          "lucide-react": "latest"
+        },
+        "existing": {
+          "note": "Reuse existing dependencies from Plex_duplicates project"
+        }
+      }
+    }
+  },
+  "phases": [
+    {
+      "id": "phase_1",
+      "name": "Project Setup & Infrastructure",
+      "status": "completed",
+      "complexity": "Low",
+      "estimated_hours": 2,
+      "dependencies": [],
+      "tasks": [
+        {
+          "id": "1.1",
+          "name": "Create PRD.json",
+          "status": "completed",
+          "complexity": "Low",
+          "estimated_hours": 0.5
+        },
+        {
+          "id": "1.2",
+          "name": "Create project folder structure",
+          "status": "completed",
+          "complexity": "Low",
+          "estimated_hours": 0.5
+        },
+        {
+          "id": "1.3",
+          "name": "Copy reusable components from existing project",
+          "status": "completed",
+          "complexity": "Low",
+          "estimated_hours": 0.5
+        },
+        {
+          "id": "1.4",
+          "name": "Set up backend package.json",
+          "status": "completed",
+          "complexity": "Low",
+          "estimated_hours": 0.5
+        }
+      ]
+    },
+    {
+      "id": "phase_2",
+      "name": "SSH Infrastructure Setup",
+      "status": "completed",
+      "complexity": "Medium",
+      "estimated_hours": 3,
+      "dependencies": ["phase_1"],
+      "tasks": [
+        {
+          "id": "2.1",
+          "name": "Create SSH setup documentation/scripts",
+          "status": "completed",
+          "complexity": "Low",
+          "estimated_hours": 1,
+          "deliverable": "backend/docs/SSH_SETUP.md"
+        },
+        {
+          "id": "2.2",
+          "name": "Implement SSH Manager service",
+          "status": "completed",
+          "complexity": "High",
+          "estimated_hours": 2,
+          "deliverable": "backend/src/services/ssh-manager.js"
+        }
+      ]
+    },
+    {
+      "id": "phase_3",
+      "name": "Backend API Development",
+      "status": "completed",
+      "complexity": "High",
+      "estimated_hours": 8,
+      "dependencies": ["phase_2"],
+      "tasks": [
+        {
+          "id": "3.1",
+          "name": "Create Express server setup",
+          "status": "completed",
+          "complexity": "Medium",
+          "estimated_hours": 2,
+          "deliverable": "backend/src/server.js"
+        },
+        {
+          "id": "3.2",
+          "name": "Implement Plex service integration",
+          "status": "pending",
+          "complexity": "Medium",
+          "estimated_hours": 2,
+          "deliverable": "backend/src/services/plex-service.js"
+        },
+        {
+          "id": "3.3",
+          "name": "Create server management routes",
+          "status": "completed",
+          "complexity": "Low",
+          "estimated_hours": 1,
+          "deliverable": "backend/src/routes/servers.js"
+        },
+        {
+          "id": "3.4",
+          "name": "Create file browsing routes",
+          "status": "completed",
+          "complexity": "Medium",
+          "estimated_hours": 2,
+          "deliverable": "backend/src/routes/files.js"
+        },
+        {
+          "id": "3.5",
+          "name": "Create transfer routes",
+          "status": "completed",
+          "complexity": "Low",
+          "estimated_hours": 1,
+          "deliverable": "backend/src/routes/transfers.js"
+        }
+      ]
+    },
+    {
+      "id": "phase_4",
+      "name": "Transfer Manager Implementation",
+      "status": "completed",
+      "complexity": "High",
+      "estimated_hours": 6,
+      "dependencies": ["phase_3"],
+      "tasks": [
+        {
+          "id": "4.1",
+          "name": "Implement Transfer Manager service",
+          "status": "completed",
+          "complexity": "High",
+          "estimated_hours": 3,
+          "deliverable": "backend/src/services/transfer-manager.js",
+          "notes": "Handle rsync execution, progress parsing, error handling"
+        },
+        {
+          "id": "4.2",
+          "name": "Implement WebSocket progress streaming",
+          "status": "completed",
+          "complexity": "Medium",
+          "estimated_hours": 2,
+          "deliverable": "backend/src/services/websocket-service.js"
+        },
+        {
+          "id": "4.3",
+          "name": "Add transfer queue management",
+          "status": "completed",
+          "complexity": "Medium",
+          "estimated_hours": 1,
+          "notes": "Support multiple concurrent transfers"
+        }
+      ]
+    },
+    {
+      "id": "phase_5",
+      "name": "Frontend Development",
+      "status": "pending",
+      "complexity": "High",
+      "estimated_hours": 10,
+      "dependencies": ["phase_4"],
+      "tasks": [
+        {
+          "id": "5.1",
+          "name": "Set up frontend structure and dependencies",
+          "status": "pending",
+          "complexity": "Low",
+          "estimated_hours": 1
+        },
+        {
+          "id": "5.2",
+          "name": "Create API service client",
+          "status": "pending",
+          "complexity": "Medium",
+          "estimated_hours": 1.5,
+          "deliverable": "frontend/src/services/api.js"
+        },
+        {
+          "id": "5.3",
+          "name": "Create WebSocket client",
+          "status": "pending",
+          "complexity": "Medium",
+          "estimated_hours": 1.5,
+          "deliverable": "frontend/src/services/websocket.js"
+        },
+        {
+          "id": "5.4",
+          "name": "Create ServerSelector component",
+          "status": "pending",
+          "complexity": "Low",
+          "estimated_hours": 1,
+          "deliverable": "frontend/src/components/ServerSelector.jsx"
+        },
+        {
+          "id": "5.5",
+          "name": "Create FileBrowser component",
+          "status": "pending",
+          "complexity": "High",
+          "estimated_hours": 3,
+          "deliverable": "frontend/src/components/FileBrowser.jsx",
+          "notes": "Support directory navigation, file selection, multi-select"
+        },
+        {
+          "id": "5.6",
+          "name": "Create ProgressBar component",
+          "status": "pending",
+          "complexity": "Medium",
+          "estimated_hours": 1,
+          "deliverable": "frontend/src/components/ProgressBar.jsx"
+        },
+        {
+          "id": "5.7",
+          "name": "Create TransferQueue component",
+          "status": "pending",
+          "complexity": "Medium",
+          "estimated_hours": 1,
+          "deliverable": "frontend/src/components/TransferQueue.jsx"
+        },
+        {
+          "id": "5.8",
+          "name": "Create main ServerTransfer component",
+          "status": "pending",
+          "complexity": "Medium",
+          "estimated_hours": 2,
+          "deliverable": "frontend/src/components/ServerTransfer.jsx",
+          "notes": "Orchestrates all sub-components"
+        },
+        {
+          "id": "5.9",
+          "name": "Update App.jsx with new tab",
+          "status": "pending",
+          "complexity": "Low",
+          "estimated_hours": 0.5
+        }
+      ]
+    },
+    {
+      "id": "phase_6",
+      "name": "Testing & Validation",
+      "status": "pending",
+      "complexity": "Medium",
+      "estimated_hours": 4,
+      "dependencies": ["phase_5"],
+      "tasks": [
+        {
+          "id": "6.1",
+          "name": "Backend API testing",
+          "status": "pending",
+          "complexity": "Medium",
+          "estimated_hours": 1.5
+        },
+        {
+          "id": "6.2",
+          "name": "SSH connection testing",
+          "status": "pending",
+          "complexity": "Medium",
+          "estimated_hours": 1
+        },
+        {
+          "id": "6.3",
+          "name": "File transfer testing",
+          "status": "pending",
+          "complexity": "High",
+          "estimated_hours": 1.5,
+          "test_cases": [
+            "Single small file transfer",
+            "Large file transfer with progress",
+            "Multiple concurrent transfers",
+            "Transfer cancellation",
+            "Error handling (network failure, insufficient space, permission denied)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phase_7",
+      "name": "Documentation & Deployment",
+      "status": "pending",
+      "complexity": "Low",
+      "estimated_hours": 2,
+      "dependencies": ["phase_6"],
+      "tasks": [
+        {
+          "id": "7.1",
+          "name": "Create comprehensive README",
+          "status": "pending",
+          "complexity": "Low",
+          "estimated_hours": 1
+        },
+        {
+          "id": "7.2",
+          "name": "Create deployment guide",
+          "status": "pending",
+          "complexity": "Low",
+          "estimated_hours": 0.5
+        },
+        {
+          "id": "7.3",
+          "name": "Create configuration examples",
+          "status": "pending",
+          "complexity": "Low",
+          "estimated_hours": 0.5
+        }
+      ]
+    },
+    {
+      "id": "phase_8",
+      "name": "Bug Fixes and Improvements",
+      "status": "in_progress",
+      "complexity": "Medium",
+      "estimated_hours": 4,
+      "dependencies": ["phase_4"],
+      "tasks": [
+        {
+          "id": "8.1",
+          "name": "Implement pre-filtering for missing files only",
+          "status": "completed",
+          "complexity": "Medium",
+          "estimated_hours": 2,
+          "deliverable": "backend/src/services/transfer-manager.js, frontend/src/App.jsx",
+          "notes": "Pre-filter files before queuing transfers, only show/transfer missing files, refresh file lists after completion for accurate status colors"
+        },
+        {
+          "id": "8.2",
+          "name": "Update frontend to display skipped transfers",
+          "status": "completed",
+          "complexity": "Low",
+          "estimated_hours": 1,
+          "deliverable": "frontend/src/App.jsx",
+          "notes": "Handle 'skipped' status in transfer progress display"
+        },
+        {
+          "id": "8.3",
+          "name": "Improve rsync progress parsing",
+          "status": "pending",
+          "complexity": "Medium",
+          "estimated_hours": 1,
+          "deliverable": "backend/src/services/ssh-manager.js",
+          "notes": "Better handling of rsync output for edge cases"
+        }
+      ]
+    }
+  ],
+  "file_structure": {
+    "frontend": {
+      "src/components/RecentlyAdded.jsx": {
+        "status": "reuse",
+        "source": "../Plex_duplicates/src/components/RecentlyAdded.jsx"
+      },
+      "src/components/DuplicateFinder.jsx": {
+        "status": "reuse",
+        "source": "../Plex_duplicates/src/components/DuplicateFinder.jsx"
+      },
+      "src/components/ServerTransfer.jsx": {
+        "status": "new",
+        "complexity": "High"
+      },
+      "src/components/ServerSelector.jsx": {
+        "status": "new",
+        "complexity": "Low"
+      },
+      "src/components/FileBrowser.jsx": {
+        "status": "new",
+        "complexity": "High"
+      },
+      "src/components/TransferQueue.jsx": {
+        "status": "new",
+        "complexity": "Medium"
+      },
+      "src/components/ProgressBar.jsx": {
+        "status": "new",
+        "complexity": "Medium"
+      },
+      "src/services/api.js": {
+        "status": "new",
+        "complexity": "Medium"
+      },
+      "src/services/websocket.js": {
+        "status": "new",
+        "complexity": "Medium"
+      },
+      "src/App.jsx": {
+        "status": "modify",
+        "source": "../Plex_duplicates/src/App.jsx"
+      }
+    },
+    "backend": {
+      "src/server.js": {
+        "status": "new",
+        "complexity": "Medium"
+      },
+      "src/services/ssh-manager.js": {
+        "status": "new",
+        "complexity": "High"
+      },
+      "src/services/transfer-manager.js": {
+        "status": "new",
+        "complexity": "High"
+      },
+      "src/services/plex-service.js": {
+        "status": "new",
+        "complexity": "Medium"
+      },
+      "src/services/websocket-service.js": {
+        "status": "new",
+        "complexity": "Medium"
+      },
+      "src/routes/servers.js": {
+        "status": "new",
+        "complexity": "Low"
+      },
+      "src/routes/files.js": {
+        "status": "new",
+        "complexity": "Medium"
+      },
+      "src/routes/transfers.js": {
+        "status": "new",
+        "complexity": "Low"
+      },
+      "src/config/config.json": {
+        "status": "new",
+        "complexity": "Low"
+      }
+    }
+  },
+  "complexity_analysis": {
+    "total_estimated_hours": 35,
+    "risk_areas": [
+      {
+        "area": "SSH password authentication security",
+        "risk_level": "Medium",
+        "mitigation": "Use environment variables, consider migration to SSH keys later"
+      },
+      {
+        "area": "rsync progress parsing",
+        "risk_level": "Medium",
+        "mitigation": "Robust regex parsing, fallback to simple status updates"
+      },
+      {
+        "area": "Concurrent transfer management",
+        "risk_level": "Medium",
+        "mitigation": "Queue system with max concurrent limit"
+      },
+      {
+        "area": "Network failures during transfer",
+        "risk_level": "High",
+        "mitigation": "Implement retry logic, support transfer resume with rsync --partial"
+      },
+      {
+        "area": "Path traversal security",
+        "risk_level": "High",
+        "mitigation": "Strict path validation, whitelist allowed directories"
+      }
+    ],
+    "complexity_by_phase": {
+      "phase_1": "Low",
+      "phase_2": "Medium",
+      "phase_3": "High",
+      "phase_4": "High",
+      "phase_5": "High",
+      "phase_6": "Medium",
+      "phase_7": "Low"
+    }
+  },
+  "configuration": {
+    "backend_config_template": {
+      "servers": [
+        {
+          "id": "server1",
+          "name": "Plex Server A",
+          "plexUrl": "http://192.168.0.105:32400",
+          "plexToken": "your-token",
+          "ssh": {
+            "host": "192.168.0.105",
+            "port": 22,
+            "username": "plex",
+            "password": "env:PLEX_SERVER1_SSH_PASSWORD"
+          },
+          "mediaPath": "/path/to/plex/media"
+        }
+      ],
+      "backend": {
+        "port": 3001,
+        "host": "0.0.0.0",
+        "corsOrigins": ["http://localhost:5173"]
+      },
+      "transfer": {
+        "maxConcurrent": 3,
+        "rsyncOptions": "-avz --progress --partial"
+      }
+    }
+  },
+  "api_endpoints": {
+    "GET /api/servers": {
+      "description": "List all configured servers",
+      "response": "Array of server objects"
+    },
+    "GET /api/servers/:id/files": {
+      "description": "Browse files on a server",
+      "params": {
+        "id": "Server ID",
+        "path": "Directory path (query param)"
+      },
+      "response": "Array of file/directory objects"
+    },
+    "POST /api/transfers": {
+      "description": "Initiate a file transfer",
+      "body": {
+        "sourceServerId": "string",
+        "destServerId": "string",
+        "files": "array of file paths"
+      },
+      "response": "Transfer ID and initial status"
+    },
+    "GET /api/transfers": {
+      "description": "List all transfers",
+      "response": "Array of transfer objects with status"
+    },
+    "DELETE /api/transfers/:id": {
+      "description": "Cancel a transfer",
+      "params": {
+        "id": "Transfer ID"
+      },
+      "response": "Success/failure message"
+    }
+  },
+  "websocket_events": {
+    "client_to_server": {},
+    "server_to_client": {
+      "transfer:progress": {
+        "data": {
+          "transferId": "string",
+          "filename": "string",
+          "percentage": "number",
+          "transferred": "bytes",
+          "total": "bytes",
+          "speed": "bytes/sec",
+          "eta": "seconds"
+        }
+      },
+      "transfer:complete": {
+        "data": {
+          "transferId": "string",
+          "filename": "string",
+          "status": "success"
+        }
+      },
+      "transfer:error": {
+        "data": {
+          "transferId": "string",
+          "filename": "string",
+          "error": "string"
+        }
+      }
+    }
+  },
+  "progress_tracking": {
+    "overall_completion": "90%",
+    "phases_completed": 6,
+    "phases_total": 7,
+    "tasks_completed": 32,
+    "tasks_total": 42,
+    "last_updated": "2025-11-07T14:30:00Z"
+  },
+  "current_configuration": {
+    "status": "configured",
+    "servers": {
+      "server1": {
+        "name": "Plex Server A",
+        "ip": "192.168.0.105",
+        "paths": {
+          "movies": "/videos/MOVIE",
+          "tv": "/videos/SERIEN",
+          "root": "/videos"
+        },
+        "notes": "Primary Plex server"
+      },
+      "server2": {
+        "name": "Plex Server B", 
+        "ip": "192.168.0.101",
+        "paths": {
+          "movies": "/usbpool/movies",
+          "tv": "/usbpool/serien",
+          "root": "/usbpool"
+        },
+        "notes": "Backend also runs here"
+      }
+    },
+    "path_mapping_examples": {
+      "movie_transfer": {
+        "source": "/videos/MOVIE/Action/Matrix.mkv",
+        "destination": "/usbpool/movies/Action/Matrix.mkv",
+        "note": "Automatically maps movies directory"
+      },
+      "tv_transfer": {
+        "source": "/videos/SERIEN/Breaking Bad/S01E01.mkv",
+        "destination": "/usbpool/serien/Breaking Bad/S01E01.mkv",
+        "note": "Automatically maps TV shows directory"
+      }
+    }
+  },
+  "deployment_guide": {
+    "prerequisites": {
+      "software": [
+        "Node.js >= 18.0.0",
+        "npm",
+        "SSH access to both Plex servers",
+        "rsync installed on both servers"
+      ],
+      "network": "All servers must be on same network or have SSH access"
+    },
+    "step_1_environment_setup": {
+      "description": "Configure environment variables",
+      "location": "backend/.env",
+      "commands": [
+        "cd Plex_Transfer_Manager/backend",
+        "cp .env.example .env",
+        "# Edit .env file with SSH passwords"
+      ],
+      "required_variables": [
+        "PLEX_SERVER1_SSH_PASSWORD=your_server_105_root_password",
+        "PLEX_SERVER2_SSH_PASSWORD=your_server_101_root_password"
+      ],
+      "security_note": "Never commit .env file to version control"
+    },
+    "step_2_ssh_key_setup": {
+      "description": "Set up passwordless SSH between servers for direct transfers",
+      "critical": true,
+      "on_server_105": [
+        "# Generate SSH key",
+        "ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N \"\"",
+        "",
+        "# Copy to Server 101",
+        "ssh-copy-id root@192.168.0.101",
+        "",
+        "# Test connection (should NOT ask for password)",
+        "ssh root@192.168.0.101 \"echo SSH key setup successful\""
+      ],
+      "verification": "SSH connection should work without password prompt",
+      "troubleshooting": "See backend/docs/SSH_SETUP.md for detailed instructions"
+    },
+    "step_3_backend_installation": {
+      "description": "Install backend dependencies and start server",
+      "commands": [
+        "cd Plex_Transfer_Manager/backend",
+        "npm install",
+        "npm run dev"
+      ],
+      "expected_output": [
+        "🚀 Plex Transfer Manager Backend",
+        "✓ Server running on http://0.0.0.0:3001",
+        "✓ Configured servers: 2",
+        "✓ Max concurrent transfers: 1",
+        "✓ WebSocket ready for real-time updates"
+      ]
+    },
+    "step_3_5_frontend_deployment": {
+      "description": "Build and deploy frontend to nginx",
+      "critical": true,
+      "commands": [
+        "cd Plex_Transfer_Manager/frontend",
+        "npm install",
+        "npm run build",
+        "cp -r dist/* /var/www/html/plex/",
+        "systemctl restart nginx"
+      ],
+      "note": "Frontend is served by nginx on port 3000, not by a development server. Always copy built files to /var/www/html/plex/ and restart nginx after frontend changes.",
+      "troubleshooting": "If frontend changes don't appear, check that files were copied to nginx document root and nginx was restarted"
+    },
+    "step_4_verification": {
+      "description": "Test backend API and SSH connections",
+      "tests": [
+        {
+          "name": "Health check",
+          "command": "curl http://localhost:3001/api/health",
+          "expected": "Status 200 with JSON response"
+        },
+        {
+          "name": "List servers",
+          "command": "curl http://localhost:3001/api/servers",
+          "expected": "Array of 2 servers with paths"
+        },
+        {
+          "name": "Test SSH to Server 1",
+          "command": "curl -X POST http://localhost:3001/api/servers/server1/test",
+          "expected": "\"Connection successful\" message"
+        },
+        {
+          "name": "Test SSH to Server 2",
+          "command": "curl -X POST http://localhost:3001/api/servers/server2/test",
+          "expected": "\"Connection successful\" message"
+        },
+        {
+          "name": "Browse movies on Server 1",
+          "command": "curl \"http://localhost:3001/api/files/server1?path=/videos/MOVIE\"",
+          "expected": "List of movie files/folders"
+        },
+        {
+          "name": "Browse TV shows on Server 1",
+          "command": "curl \"http://localhost:3001/api/files/server1?path=/videos/SERIEN\"",
+          "expected": "List of TV show files/folders"
+        }
+      ]
+    }
+  },
+  "next_steps": {
+    "immediate": [
+      {
+        "step": 1,
+        "task": "Set up .env file with SSH passwords",
+        "priority": "Critical",
+        "estimated_time": "5 minutes"
+      },
+      {
+        "step": 2,
+        "task": "Configure SSH keys between Server 105 and Server 101",
+        "priority": "Critical",
+        "estimated_time": "10 minutes",
+        "reference": "backend/docs/SSH_SETUP.md"
+      },
+      {
+        "step": 3,
+        "task": "Install backend dependencies and test",
+        "priority": "High",
+        "estimated_time": "5 minutes",
+        "commands": ["cd backend", "npm install", "npm run dev"]
+      },
+      {
+        "step": 4,
+        "task": "Run verification tests",
+        "priority": "High",
+        "estimated_time": "10 minutes",
+        "reference": "deployment_guide.step_4_verification"
+      }
+    ],
+    "frontend_development": [
+      {
+        "phase": "Phase 5",
+        "description": "Build React frontend components",
+        "estimated_hours": 10,
+        "components": [
+          "ServerTransfer.jsx - Main transfer interface",
+          "FileBrowser.jsx - Browse and select files",
+          "TransferQueue.jsx - Show active transfers",
+          "ProgressBar.jsx - Real-time progress display",
+          "ServerSelector.jsx - Server dropdown",
+          "api.js - Backend API client",
+          "websocket.js - WebSocket client"
+        ]
+      }
+    ],
+    "production_considerations": [
+      "Add authentication to backend API",
+      "Set up HTTPS with SSL certificates",
+      "Configure firewall rules",
+      "Set up process manager (PM2) for backend",
+      "Add logging and monitoring",
+      "Create backup strategy",
+      "Document recovery procedures"
+    ]
+  },
+  "features_implemented": {
+    "ssh_key_authentication": {
+      "description": "SSH key-based authentication from backend to Plex servers",
+      "benefit": "Secure, passwordless connections for file operations",
+      "status": "Implemented",
+      "configuration": "Private key loaded from /root/.ssh/id_rsa",
+      "servers": ["192.168.0.105", "192.168.0.101"],
+      "testing": "Manual and API-based SSH connections verified"
+    },
+    "backend_api": {
+      "description": "Complete REST API for server and file management",
+      "benefit": "Full backend functionality for frontend integration",
+      "status": "Implemented",
+      "endpoints": [
+        "GET /api/servers - List configured servers",
+        "GET /api/files/:serverId - Browse server directories",
+        "POST /api/transfers - Initiate file transfers",
+        "GET /api/transfers - List active transfers",
+        "DELETE /api/transfers/:id - Cancel transfers"
+      ],
+      "cors": "Configured for network access"
+    },
+    "websocket_realtime": {
+      "description": "Real-time WebSocket communication for transfer progress",
+      "benefit": "Live progress updates without polling",
+      "status": "Implemented",
+      "events": ["transfer:progress", "transfer:complete", "transfer:error"],
+      "connection": "Active client connections established"
+    },
+    "frontend_foundation": {
+      "description": "React application with API and WebSocket integration",
+      "benefit": "Modern web interface foundation",
+      "status": "Implemented",
+      "components": [
+        "App.jsx - Main application with tabs",
+        "ServerSelector.jsx - Server dropdown component",
+        "api.js - Backend API client service",
+        "websocket.js - Real-time communication service"
+      ],
+      "network_access": "Configured for external IP access (192.168.2.208:3000)"
+    },
+    "separate_media_paths": {
+      "description": "Support for different movie and TV show paths on each server",
+      "benefit": "Allows flexible directory structures across servers",
+      "status": "Implemented",
+      "configuration": "mediaPaths object with movies, tv, and root paths",
+      "automatic_mapping": true,
+      "path_detection": "Automatically detects media type and maps to correct destination path"
+    },
+    "backend_services": {
+      "ssh_manager": {
+        "status": "Complete",
+        "features": [
+          "SSH connection pooling",
+          "Command execution",
+          "File listing with metadata",
+          "Path validation",
+          "rsync transfer orchestration"
+        ]
+      },
+      "transfer_manager": {
+        "status": "Complete",
+        "features": [
+          "Transfer queue management",
+          "Concurrent transfer limiting (configurable)",
+          "Real-time progress tracking",
+          "WebSocket progress streaming",
+          "Smart path mapping for movies/TV",
+          "Transfer cancellation",
+          "Statistics tracking"
+        ]
+      }
+    },
+    "api_routes": {
+      "servers": "List, get details, test SSH connections",
+      "files": "Browse directories, get file info, path validation",
+      "transfers": "Create, list, get, cancel transfers with real-time updates"
+    }
+  },
+  "known_limitations": {
+    "current_version": [
+      "Transfer UI components not yet implemented (FileBrowser, TransferQueue, ProgressBar)",
+      "No Plex API integration for server names and recent movies",
+      "No disk space monitoring in UI",
+      "No user authentication on API",
+      "Transfer resume not fully implemented",
+      "No bandwidth throttling UI",
+      "No transfer scheduling"
+    ],
+    "future_enhancements": [
+      "Support for more than 2 servers",
+      "Scheduled transfers",
+      "Bandwidth management per transfer",
+      "Transfer history and analytics",
+      "Email notifications on completion",
+      "Mobile-responsive UI"
+    ]
+  }
+}

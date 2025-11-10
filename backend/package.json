@@ -1,0 +1,34 @@
+{
+  "name": "plex-transfer-manager-backend",
+  "version": "1.0.0",
+  "description": "Backend server for Plex Transfer Manager with SSH file transfer capabilities",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "generate-nginx": "node ../scripts/generate-nginx.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "plex",
+    "ssh",
+    "file-transfer",
+    "rsync"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "node-fetch": "^3.3.2",
+    "socket.io": "^4.6.1",
+    "ssh2": "^1.14.0",
+    "uuid": "^9.0.0",
+    "xml2js": "^0.6.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
