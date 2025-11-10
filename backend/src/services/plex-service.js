@@ -195,7 +195,7 @@ class PlexService {
     const isWatched = viewCount > 0;
     const isPartiallyWatched = !isWatched && viewOffset > 0;
 
-    return {
+    const parsedItem = {
       id: video.$.ratingKey,
       title: displayTitle,
       originalTitle: video.$.title,
@@ -206,6 +206,7 @@ class PlexService {
       year: video.$.year,
       thumb: video.$.thumb,
       art: video.$.art,
+      grandparentThumb: video.$.grandparentThumb,
       duration: duration,
       addedAt: video.$.addedAt,
       updatedAt: video.$.updatedAt,
@@ -228,6 +229,16 @@ class PlexService {
       isWatched: isWatched,
       isPartiallyWatched: isPartiallyWatched,
     };
+
+    // Debug logging for image extraction
+    if (contentType === 'episode') {
+      console.log(`🎭 Episode parsed: ${parsedItem.title}`);
+      console.log(`   thumb: ${parsedItem.thumb}`);
+      console.log(`   art: ${parsedItem.art}`);
+      console.log(`   grandparentThumb: ${parsedItem.grandparentThumb}`);
+    }
+
+    return parsedItem;
   }
 
   /**
@@ -569,18 +580,295 @@ class PlexService {
         }
       }
 
-      // Remove duplicates based on ratingKey
-      const uniqueResults = allResults.filter((item, index, self) =>
+      // Process TV shows to create season and show entries
+      const processedResults = await this.processTVSearchResults(serverUrl, token, allResults);
+
+      // Remove duplicates based on ratingKey and sort results
+      const uniqueResults = processedResults.filter((item, index, self) =>
         index === self.findIndex(other => other.id === item.id)
       );
 
-      console.log(`Total unique search results found: ${uniqueResults.length}`);
-      return uniqueResults;
+      // Sort results: shows first, then seasons, then episodes (grouped by show)
+      const sortedResults = this.sortSearchResults(uniqueResults);
+
+      console.log(`Total unique search results found: ${sortedResults.length}`);
+      return sortedResults;
 
     } catch (error) {
       console.error('Error searching content:', error);
       throw new Error(`Failed to search content: ${error.message}`);
     }
+  }
+
+  /**
+   * Process TV search results to add season and show entries
+   * @param {string} serverUrl - Plex server URL
+   * @param {string} token - Plex token
+   * @param {Array} results - Raw search results
+   * @returns {Promise<Array>} Processed results with seasons and shows
+   */
+  async processTVSearchResults(serverUrl, token, results) {
+    const processedResults = [...results];
+    const showMap = new Map();
+
+    // Group episodes by show
+    for (const result of results) {
+      if (result.contentType === 'episode' && result.showTitle && result.grandparentRatingKey) {
+        const showId = result.grandparentRatingKey;
+        if (!showMap.has(showId)) {
+          showMap.set(showId, {
+            id: showId,
+            title: result.showTitle,
+            art: result.art,
+            thumb: result.grandparentThumb,
+            year: result.year,
+            seasons: new Map()
+          });
+        }
+
+        const show = showMap.get(showId);
+        const seasonKey = `${showId}_S${result.seasonNumber}`;
+        if (!show.seasons.has(seasonKey)) {
+          show.seasons.set(seasonKey, {
+            id: seasonKey,
+            seasonId: result.parentRatingKey,
+            showTitle: result.showTitle,
+            seasonNumber: result.seasonNumber,
+            art: result.art,
+            thumb: result.thumb,
+            episodes: []
+          });
+        }
+
+        show.seasons.get(seasonKey).episodes.push(result);
+      }
+    }
+
+    // Create season and show entries for each show
+    for (const [showId, showData] of showMap) {
+      try {
+        // Get all seasons for this show
+        const allSeasons = await this.getShowSeasons(serverUrl, token, showId);
+
+        // Create season entries
+        for (const season of allSeasons) {
+          const seasonEntry = this.createSeasonEntry(season, showData);
+          processedResults.push(seasonEntry);
+        }
+
+        // Create full show entry
+        const showEntry = this.createShowEntry(showData, allSeasons);
+        processedResults.push(showEntry);
+
+      } catch (error) {
+        console.error(`Error processing show ${showData.title}:`, error);
+        // Continue with other shows
+      }
+    }
+
+    return processedResults;
+  }
+
+  /**
+   * Get all seasons for a specific show
+   * @param {string} serverUrl - Plex server URL
+   * @param {string} token - Plex token
+   * @param {string} showId - Show rating key
+   * @returns {Promise<Array>} Array of seasons with episodes
+   */
+  async getShowSeasons(serverUrl, token, showId) {
+    try {
+      const headers = { ...this.baseHeaders, 'X-Plex-Token': token };
+      console.log(`Fetching all seasons for show: ${showId}`);
+
+      const response = await fetch(`${serverUrl}/library/metadata/${showId}/children`, { headers });
+
+      if (!response.ok) {
+        throw new Error(`Plex API error: ${response.status}`);
+      }
+
+      const xmlData = await response.text();
+      const parser = new xml2js.Parser({ explicitArray: false });
+      const result = await parser.parseStringPromise(xmlData);
+
+      const seasons = [];
+
+      if (result.MediaContainer && result.MediaContainer.Directory) {
+        const directoryArray = Array.isArray(result.MediaContainer.Directory)
+          ? result.MediaContainer.Directory
+          : [result.MediaContainer.Directory];
+
+        for (const directory of directoryArray) {
+          if (directory.$.type === 'season') {
+            const seasonNumber = directory.$.index ? parseInt(directory.$.index) : 0;
+
+            // Get all episodes for this season
+            const episodes = await this.getSeasonEpisodes(serverUrl, token, directory.$.ratingKey);
+
+            seasons.push({
+              id: directory.$.ratingKey,
+              title: directory.$.title,
+              seasonNumber: seasonNumber,
+              art: directory.$.art,
+              thumb: directory.$.thumb,
+              episodes: episodes,
+              episodeCount: episodes.length,
+              totalSize: episodes.reduce((sum, ep) => sum + (ep.fileSize || 0), 0)
+            });
+          }
+        }
+      }
+
+      return seasons.sort((a, b) => a.seasonNumber - b.seasonNumber);
+
+    } catch (error) {
+      console.error('Error fetching show seasons:', error);
+      throw new Error(`Failed to get show seasons: ${error.message}`);
+    }
+  }
+
+  /**
+   * Create a season entry for search results
+   * @param {Object} season - Season data
+   * @param {Object} showData - Show data
+   * @returns {Object} Season entry
+   */
+  createSeasonEntry(season, showData) {
+    return {
+      id: `season_${season.id}`,
+      title: `${showData.title} - Season ${season.seasonNumber}`,
+      originalTitle: `Season ${season.seasonNumber}`,
+      showTitle: showData.title,
+      seasonNumber: season.seasonNumber,
+      contentType: 'season',
+      year: showData.year,
+      thumb: season.thumb,
+      art: season.art,
+      summary: `Season ${season.seasonNumber} of ${showData.title}`,
+      episodes: season.episodes,
+      episodeCount: season.episodeCount,
+      totalSize: season.totalSize,
+      // For compatibility with existing code
+      filePath: null,
+      fileSize: null,
+      isWatched: false,
+      isPartiallyWatched: false,
+      watchProgress: 0
+    };
+  }
+
+  /**
+   * Create a show entry for search results
+   * @param {Object} showData - Show data
+   * @param {Array} seasons - All seasons for the show
+   * @returns {Object} Show entry
+   */
+  createShowEntry(showData, seasons) {
+    const allEpisodes = seasons.flatMap(season => season.episodes);
+    const totalSize = seasons.reduce((sum, season) => sum + season.totalSize, 0);
+    const totalEpisodes = allEpisodes.length;
+
+    const showEntry = {
+      id: `show_${showData.id}`,
+      title: showData.title,
+      originalTitle: showData.title,
+      contentType: 'show',
+      year: showData.year,
+      thumb: showData.thumb,
+      art: showData.art,
+      summary: `Complete series: ${totalEpisodes} episodes across ${seasons.length} seasons`,
+      seasons: seasons,
+      episodes: allEpisodes,
+      seasonCount: seasons.length,
+      episodeCount: totalEpisodes,
+      totalSize: totalSize,
+      // For compatibility with existing code
+      filePath: null,
+      fileSize: null,
+      isWatched: false,
+      isPartiallyWatched: false,
+      watchProgress: 0
+    };
+
+    // Debug logging for show creation
+    console.log(`🎬 Show entry created: ${showEntry.title}`);
+    console.log(`   thumb: ${showEntry.thumb}`);
+    console.log(`   art: ${showEntry.art}`);
+
+    return showEntry;
+  }
+
+  /**
+   * Sort search results: shows first, then seasons, then movies (no individual episodes)
+   * @param {Array} results - Search results to sort
+   * @returns {Array} Sorted results
+   */
+  sortSearchResults(results) {
+    const showOrder = [];
+    const showMap = new Map();
+
+    // Group items by show
+    for (const result of results) {
+      let showKey;
+      if (result.contentType === 'show') {
+        showKey = result.title;
+      } else if (result.contentType === 'season') {
+        showKey = result.showTitle;
+      } else if (result.contentType === 'episode') {
+        showKey = result.showTitle;
+      } else {
+        // Movies and other content
+        showKey = '__movies__';
+      }
+
+      if (!showMap.has(showKey)) {
+        showMap.set(showKey, {
+          show: null,
+          seasons: [],
+          episodes: []
+        });
+        showOrder.push(showKey);
+      }
+
+      const group = showMap.get(showKey);
+      if (result.contentType === 'show') {
+        group.show = result;
+      } else if (result.contentType === 'season') {
+        group.seasons.push(result);
+      } else if (result.contentType === 'episode') {
+        group.episodes.push(result);
+      } else {
+        // Movies go at the end
+        if (!showMap.has('__movies__')) {
+          showMap.set('__movies__', { show: null, seasons: [], episodes: [] });
+          showOrder.push('__movies__');
+        }
+        showMap.get('__movies__').episodes.push(result);
+      }
+    }
+
+    // Sort within each group and only include shows, seasons, and movies
+    const sortedResults = [];
+    for (const showKey of showOrder) {
+      const group = showMap.get(showKey);
+
+      // Add show first
+      if (group.show) {
+        sortedResults.push(group.show);
+      }
+
+      // Add seasons sorted by season number
+      group.seasons.sort((a, b) => a.seasonNumber - b.seasonNumber);
+      sortedResults.push(...group.seasons);
+
+      // For movies/other content, add them (they're in the episodes array of __movies__)
+      if (showKey === '__movies__') {
+        sortedResults.push(...group.episodes);
+      }
+      // Don't add individual episodes for TV shows
+    }
+
+    return sortedResults;
   }
 
   /**
@@ -595,59 +883,67 @@ class PlexService {
   async searchInLibrary(serverUrl, token, sectionId, libraryType, query) {
     try {
       const headers = { ...this.baseHeaders, 'X-Plex-Token': token };
-      let searchType;
+      let searchTypes = [];
 
       // Map Plex library types to search types
       switch (libraryType) {
         case 'movie':
-          searchType = 1;
+          searchTypes = [1]; // movies
           break;
         case 'show':
-          searchType = 2;
+          searchTypes = [2, 4]; // shows and episodes (to get both)
           break;
         case 'artist':
-          searchType = 8;
+          searchTypes = [8];
           break;
         default:
           console.log(`Unsupported library type: ${libraryType} for section ${sectionId}`);
           return [];
       }
 
-      // Use the correct global search endpoint
-      const url = `${serverUrl}/library/search?query=${encodeURIComponent(query)}&type=${searchType}&limit=50`;
-
-      console.log(`Searching in library ${sectionId} (${libraryType}): ${url}`);
-      const response = await fetch(url, { headers });
-
-      if (!response.ok) {
-        throw new Error(`Plex API error: ${response.status}`);
-      }
-
-      const xmlData = await response.text();
-      const parser = new xml2js.Parser({ explicitArray: false });
-      const result = await parser.parseStringPromise(xmlData);
-
       let libraryResults = [];
 
-      if (result.MediaContainer && result.MediaContainer.SearchResult) {
-        const searchResults = Array.isArray(result.MediaContainer.SearchResult)
-          ? result.MediaContainer.SearchResult
-          : [result.MediaContainer.SearchResult];
+      // Search for each type
+      for (const searchType of searchTypes) {
+        const url = `${serverUrl}/library/search?query=${encodeURIComponent(query)}&type=${searchType}&limit=50`;
 
-        console.log(`Found ${searchResults.length} search results for library ${sectionId}`);
+        console.log(`Searching in library ${sectionId} (${libraryType}, type=${searchType}): ${url}`);
+        const response = await fetch(url, { headers });
 
-        for (const searchResult of searchResults) {
-          if (searchResult.Video) {
-            const video = searchResult.Video;
-            const contentType = video.$.type === 'episode' ? 'episode' : 'movie';
-            const parsedItem = this.parseVideoItem(video, contentType);
-            libraryResults.push(parsedItem);
-          } else {
-            console.log(`SearchResult missing Video element:`, JSON.stringify(searchResult, null, 2));
-          }
+        if (!response.ok) {
+          console.error(`Plex API error for type ${searchType}: ${response.status}`);
+          continue; // Try next type
         }
-      } else {
-        console.log(`No SearchResult in response for library ${sectionId}:`, JSON.stringify(result.MediaContainer, null, 2));
+
+        const xmlData = await response.text();
+        const parser = new xml2js.Parser({ explicitArray: false });
+        const result = await parser.parseStringPromise(xmlData);
+
+        if (result.MediaContainer && result.MediaContainer.SearchResult) {
+          const searchResults = Array.isArray(result.MediaContainer.SearchResult)
+            ? result.MediaContainer.SearchResult
+            : [result.MediaContainer.SearchResult];
+
+          console.log(`Found ${searchResults.length} search results for library ${sectionId}, type ${searchType}`);
+
+          for (const searchResult of searchResults) {
+            if (searchResult.Video) {
+              const video = searchResult.Video;
+              const contentType = video.$.type === 'episode' ? 'episode' : 'movie';
+              const parsedItem = this.parseVideoItem(video, contentType);
+              libraryResults.push(parsedItem);
+            } else if (searchResult.Directory && searchResult.Directory.$.type === 'show') {
+              // Handle show results
+              const show = searchResult.Directory;
+              const showItem = this.parseShowItem(show);
+              libraryResults.push(showItem);
+            } else {
+              console.log(`SearchResult missing expected element:`, JSON.stringify(searchResult, null, 2));
+            }
+          }
+        } else {
+          console.log(`No SearchResult in response for library ${sectionId}, type ${searchType}`);
+        }
       }
 
       return libraryResults;
@@ -656,6 +952,30 @@ class PlexService {
       console.error(`Error searching in library ${sectionId}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Parse a show item from Plex XML
+   * @param {Object} directory - Directory XML object for show
+   * @returns {Object} Parsed show item
+   */
+  parseShowItem(directory) {
+    return {
+      id: directory.$.ratingKey,
+      title: directory.$.title,
+      originalTitle: directory.$.title,
+      contentType: 'show',
+      year: directory.$.year,
+      thumb: directory.$.thumb,
+      art: directory.$.art,
+      summary: directory.$.summary,
+      // For compatibility with existing code
+      filePath: null,
+      fileSize: null,
+      isWatched: false,
+      isPartiallyWatched: false,
+      watchProgress: 0
+    };
   }
 }
 

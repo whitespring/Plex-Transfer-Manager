@@ -802,13 +802,47 @@ function App() {
       const resultsWithExistence = await Promise.all(
         results.map(async (item) => {
           try {
-            const destPath = mapPathToDestination(item.filePath);
-            const existenceCheck = await apiService.checkFileExists(frontendConfig.defaultDestServer, destPath);
-            return {
-              ...item,
-              existsOnDestination: existenceCheck.exists,
-              destinationPath: destPath
-            };
+            // For seasons and shows, check if ALL episodes exist
+            if (item.contentType === 'season' || item.contentType === 'show') {
+              const allEpisodes = item.contentType === 'season' ? item.episodes : item.episodes;
+              if (allEpisodes && allEpisodes.length > 0) {
+                // Check existence for all episodes
+                const episodeChecks = await Promise.all(
+                  allEpisodes.map(async (episode) => {
+                    try {
+                      const destPath = mapPathToDestination(episode.filePath);
+                      const existenceCheck = await apiService.checkFileExists(frontendConfig.defaultDestServer, destPath);
+                      return existenceCheck.exists;
+                    } catch (error) {
+                      console.error(`Error checking episode existence for ${episode.title}:`, error);
+                      return false;
+                    }
+                  })
+                );
+                const allEpisodesExist = episodeChecks.every(exists => exists);
+
+                return {
+                  ...item,
+                  existsOnDestination: allEpisodesExist,
+                  destinationPath: null // Not applicable for aggregated items
+                };
+              } else {
+                return {
+                  ...item,
+                  existsOnDestination: false,
+                  destinationPath: null
+                };
+              }
+            } else {
+              // For movies and episodes, check individual file existence
+              const destPath = mapPathToDestination(item.filePath);
+              const existenceCheck = await apiService.checkFileExists(frontendConfig.defaultDestServer, destPath);
+              return {
+                ...item,
+                existsOnDestination: existenceCheck.exists,
+                destinationPath: destPath
+              };
+            }
           } catch (error) {
             console.error('Error checking search result existence:', error);
             return {
@@ -854,12 +888,33 @@ function App() {
       const selectedResultObjects = searchResults.filter(result => selectedSearchResults.has(result.id));
       console.log('Selected search result objects:', selectedResultObjects);
 
+      // Expand seasons and shows to their episodes
+      const expandedResults = [];
+      for (const result of selectedResultObjects) {
+        if (result.contentType === 'season') {
+          // Add all episodes from the season
+          if (result.episodes && result.episodes.length > 0) {
+            expandedResults.push(...result.episodes);
+          }
+        } else if (result.contentType === 'show') {
+          // Add all episodes from all seasons
+          if (result.episodes && result.episodes.length > 0) {
+            expandedResults.push(...result.episodes);
+          }
+        } else {
+          // Regular movie or episode
+          expandedResults.push(result);
+        }
+      }
+
+      console.log(`Expanded ${selectedResultObjects.length} selections to ${expandedResults.length} files`);
+
       // Filter out results that already exist on destination
       const filesToTransfer = [];
       let skippedCount = 0;
       let errorCount = 0;
 
-      for (const result of selectedResultObjects) {
+      for (const result of expandedResults) {
         try {
           const destPath = mapPathToDestination(result.filePath);
           console.log(`🔍 Checking existence: ${destPath}`);
@@ -1757,10 +1812,14 @@ function App() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-2">
                     {searchResults.map((result) => {
                       const isSelected = selectedSearchResults.has(result.id);
-                      const posterUrl = result.contentType === 'movie'
-                        ? (result.thumb ? apiService.getMoviePosterUrl(selectedServer, result.thumb) : null)
-                        : (result.art ? apiService.getMoviePosterUrl(selectedServer, result.art) : null);
-                      const existsOnDestination = result.existsOnDestination;
+                      const posterUrl = result.thumb ? apiService.getMoviePosterUrl(selectedServer, result.thumb) : null;
+
+                      // For seasons and shows, check if ALL episodes exist
+                      let existsOnDestination = result.existsOnDestination;
+                      if (result.contentType === 'season' || result.contentType === 'show') {
+                        const allEpisodes = result.contentType === 'season' ? result.episodes : result.episodes;
+                        existsOnDestination = allEpisodes && allEpisodes.length > 0 && allEpisodes.every(ep => ep.existsOnDestination);
+                      }
 
                       return (
                         <div
@@ -1776,10 +1835,15 @@ function App() {
                         >
                           {/* Status indicators */}
                           <div className="absolute top-1 right-1 z-10 flex space-x-1">
-                            {/* Watch status checkmark */}
-                            {result.isWatched && (
-                              <div className={`h-4 w-4 ${darkMode ? 'bg-blue-600' : 'bg-blue-500'} rounded-full flex items-center justify-center`}>
-                                <CheckCircle className="h-3 w-3 text-white" />
+                            {/* Content type indicator */}
+                            {result.contentType === 'show' && (
+                              <div className={`h-4 w-4 ${darkMode ? 'bg-purple-600' : 'bg-purple-500'} rounded-full flex items-center justify-center`}>
+                                <span className="text-white text-xs font-bold">S</span>
+                              </div>
+                            )}
+                            {result.contentType === 'season' && (
+                              <div className={`h-4 w-4 ${darkMode ? 'bg-orange-600' : 'bg-orange-500'} rounded-full flex items-center justify-center`}>
+                                <span className="text-white text-xs font-bold">S{result.seasonNumber}</span>
                               </div>
                             )}
 
@@ -1798,18 +1862,6 @@ function App() {
                               className="h-3 w-3 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                             />
                           </div>
-
-                          {/* Watch progress bar */}
-                          {result.isPartiallyWatched && result.watchProgress > 0 && (
-                            <div className="absolute bottom-0 left-0 right-0 z-10">
-                              <div className="w-full bg-black/50 h-1">
-                                <div
-                                  className="bg-blue-500 h-1 transition-all duration-300"
-                                  style={{ width: `${result.watchProgress}%` }}
-                                ></div>
-                              </div>
-                            </div>
-                          )}
 
                           <div className="flex flex-col items-center space-y-1 pt-4">
                             {/* Content Poster */}
@@ -1839,6 +1891,16 @@ function App() {
                               <h4 className={`text-xs font-medium ${darkMode ? 'text-white' : 'text-gray-900'} line-clamp-2 leading-tight`}>
                                 {result.title}
                               </h4>
+                              {result.contentType === 'show' && (
+                                <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'} mt-0.5`}>
+                                  {result.seasonCount} seasons • {result.episodeCount} episodes
+                                </p>
+                              )}
+                              {result.contentType === 'season' && (
+                                <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'} mt-0.5`}>
+                                  Season {result.seasonNumber} • {result.episodeCount} episodes
+                                </p>
+                              )}
                               {result.contentType === 'episode' && result.showTitle && (
                                 <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'} mt-0.5`}>
                                   {result.showTitle}
@@ -1847,7 +1909,12 @@ function App() {
                               <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-0.5`}>
                                 {result.year} • {result.contentType}
                               </p>
-                              {result.fileSize && (
+                              {result.totalSize && (result.contentType === 'season' || result.contentType === 'show') && (
+                                <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                  {Math.round(result.totalSize / (1024 * 1024 * 1024))} GB total
+                                </p>
+                              )}
+                              {result.fileSize && result.contentType === 'episode' && (
                                 <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                                   {Math.round(result.fileSize / (1024 * 1024 * 1024))} GB
                                 </p>
