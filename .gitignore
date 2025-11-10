@@ -11,6 +11,7 @@ yarn-error.log*
 
 # Backend
 backend/.env
+backend/config.json
 backend/src/config/config.json
 backend/node_modules/
 
